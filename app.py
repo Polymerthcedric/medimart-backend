@@ -147,7 +147,7 @@ pairs = [
     (r'(.*)discount(.*)', ['We offer up to 15% discount on select medicines.']),
     (r'(.*)generic medicine(.*)', ['Yes, we provide approved and affordable generic alternatives.']),
     (r'(.*)best seller(.*)', ['Top sellers include Paracetamol, Dettol, Dabur Chyawanprash, and glucometers.']),
-    (r'(.*)contact', ['Call us at +254116497339 or chat with us via WhatsApp.']),
+    (r'(.*)contact', ['Call us at +254 100363487 or chat with us via WhatsApp.']),
     (r'(.*)customer care(.*)', ["You can reach our customer care through the 'Contact Us' page or call us directly."]),
     (r'(.*)', ["I'm not sure about that. Could you ask something related to our store, products, or services?"]),
 ]
