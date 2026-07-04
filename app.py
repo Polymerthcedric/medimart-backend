@@ -103,10 +103,10 @@ def delete_product():
         cursor = connection.cursor(pymysql.cursors.DictCursor)
 
         # Fetch the product photo so we can delete the file too
-        cursor.execute('select product_photo from product_details where id = %s', (product_id,))
+        cursor.execute('select product_photo from product_details where product_id = %s', (product_id,))
         product = cursor.fetchone()
 
-        sql = 'delete from product_details where id = %s'
+        sql = 'delete from product_details where product_id = %s'
         cursor.execute(sql, (product_id,))
         connection.commit()
 
