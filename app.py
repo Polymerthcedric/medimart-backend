@@ -25,11 +25,14 @@ def signup():
         password='modcom1234',
         database='polymerthcedric$default'
     )
-    cursor = connection.cursor()
-    sql = 'insert into users(username,email,password,phone) values (%s,%s,%s,%s)'
-    data = (username, email, password, phone)
-    cursor.execute(sql, data)
-    connection.commit()
+    try:
+        cursor = connection.cursor()
+        sql = 'insert into users(username,email,password,phone) values (%s,%s,%s,%s)'
+        data = (username, email, password, phone)
+        cursor.execute(sql, data)
+        connection.commit()
+    finally:
+        connection.close()
     return jsonify({"success": "Thank you for signing up"})
 
 
@@ -44,16 +47,19 @@ def signin():
         password='modcom1234',
         database='polymerthcedric$default'
     )
-    cursor = connection.cursor(pymysql.cursors.DictCursor)
-    sql = 'select * from users where email = %s and password = %s'
-    data = (email, password)
-    cursor.execute(sql, data)
-    count = cursor.rowcount
-    if count == 0:
-        return jsonify({"message": "Login failed"})
-    else:
-        user = cursor.fetchone()
-        return jsonify({"message": "Login successful", "user": user})
+    try:
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        sql = 'select * from users where email = %s and password = %s'
+        data = (email, password)
+        cursor.execute(sql, data)
+        count = cursor.rowcount
+        if count == 0:
+            return jsonify({"message": "Login failed"})
+        else:
+            user = cursor.fetchone()
+            return jsonify({"message": "Login successful", "user": user})
+    finally:
+        connection.close()
 
 
 @app.route('/api/add_product', methods=['POST'])
@@ -73,14 +79,17 @@ def add_product():
             password='modcom1234',
             database='polymerthcedric$default'
         )
-        cursor = connection.cursor()
-        sql = '''
-            INSERT INTO product_details (product_name, product_description, product_cost, product_photo)
-            VALUES (%s, %s, %s, %s)
-        '''
-        data = (product_name, product_description, product_cost, filename)
-        cursor.execute(sql, data)
-        connection.commit()
+        try:
+            cursor = connection.cursor()
+            sql = '''
+                INSERT INTO product_details (product_name, product_description, product_cost, product_photo)
+                VALUES (%s, %s, %s, %s)
+            '''
+            data = (product_name, product_description, product_cost, filename)
+            cursor.execute(sql, data)
+            connection.commit()
+        finally:
+            connection.close()
         return jsonify({"success": "Product details added successfully"})
 
     except Exception as e:
@@ -100,21 +109,24 @@ def delete_product():
             password='modcom1234',
             database='polymerthcedric$default'
         )
-        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        try:
+            cursor = connection.cursor(pymysql.cursors.DictCursor)
 
-        # Fetch the product photo so we can delete the file too
-        cursor.execute('select product_photo from product_details where product_id = %s', (product_id,))
-        product = cursor.fetchone()
+            # Fetch the product photo so we can delete the file too
+            cursor.execute('select product_photo from product_details where product_id = %s', (product_id,))
+            product = cursor.fetchone()
 
-        sql = 'delete from product_details where product_id = %s'
-        cursor.execute(sql, (product_id,))
-        connection.commit()
+            sql = 'delete from product_details where product_id = %s'
+            cursor.execute(sql, (product_id,))
+            connection.commit()
 
-        # Remove the image file if it exists
-        if product and product['product_photo']:
-            photo_path = os.path.join(app.config['UPLOAD_FOLDER'], product['product_photo'])
-            if os.path.exists(photo_path):
-                os.remove(photo_path)
+            # Remove the image file if it exists
+            if product and product['product_photo']:
+                photo_path = os.path.join(app.config['UPLOAD_FOLDER'], product['product_photo'])
+                if os.path.exists(photo_path):
+                    os.remove(photo_path)
+        finally:
+            connection.close()
 
         return jsonify({"success": "Product deleted successfully"})
 
@@ -131,10 +143,13 @@ def get_product_details():
         password='modcom1234',
         database='polymerthcedric$default'
     )
-    cursor = connection.cursor(pymysql.cursors.DictCursor)
-    sql = "select * from product_details"
-    cursor.execute(sql)
-    product_details = cursor.fetchall()
+    try:
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        sql = "select * from product_details"
+        cursor.execute(sql)
+        product_details = cursor.fetchall()
+    finally:
+        connection.close()
     return jsonify(product_details)
 
 
@@ -189,7 +204,7 @@ from requests.auth import HTTPBasicAuth
 
 @app.route('/api/mpesa_payment', methods=['POST'])
 def mpesa_payment():
-    if request.method == 'POST':
+    try:
         amount = request.form['amount']
         phone = request.form['phone']
 
@@ -256,6 +271,10 @@ def mpesa_payment():
         else:
             error_msg = result.get("errorMessage", result.get("responseDescription", "M-Pesa service unavailable"))
             return jsonify({"message": f"Payment failed: {error_msg}"}), 500
+
+    except Exception as e:
+        print("M-Pesa Error:", str(e))
+        return jsonify({"message": "Payment service error. Please try again later."}), 500
 
 
 @app.route('/api/mpesa_callback', methods=['POST'])
