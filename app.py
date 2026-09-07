@@ -2,6 +2,10 @@ from flask import *
 app = Flask(__name__)
 from flask_cors import CORS
 
+# NOTE: This is a demo/educational project. All credentials below are
+# sandbox/placeholder values and are NOT intended for production use.
+# In production, use environment variables (os.environ.get()) for secrets.
+
 CORS(app)
 
 import pymysql
@@ -19,6 +23,7 @@ def signup():
     password = request.form['password']
     phone = request.form['phone']
 
+    # DEMO credentials — sandbox/placeholder values, not for production
     connection = pymysql.connect(
         host='polymerthcedric.mysql.pythonanywhere-services.com',
         user='polymerthcedric',
@@ -41,6 +46,7 @@ def signin():
     email = request.form['email']
     password = request.form['password']
 
+    # DEMO credentials — sandbox/placeholder values, not for production
     connection = pymysql.connect(
         host='polymerthcedric.mysql.pythonanywhere-services.com',
         user='polymerthcedric',
@@ -73,6 +79,7 @@ def add_product():
         photo_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         photo.save(photo_path)
 
+        # DEMO credentials — sandbox/placeholder values, not for production
         connection = pymysql.connect(
             host='polymerthcedric.mysql.pythonanywhere-services.com',
             user='polymerthcedric',
@@ -103,6 +110,7 @@ def delete_product():
     try:
         product_id = request.form['product_id']
 
+        # DEMO credentials — sandbox/placeholder values, not for production
         connection = pymysql.connect(
             host='polymerthcedric.mysql.pythonanywhere-services.com',
             user='polymerthcedric',
@@ -137,6 +145,7 @@ def delete_product():
 
 @app.route('/api/get_product_details', methods=['GET'])
 def get_product_details():
+    # DEMO credentials — sandbox/placeholder values, not for production
     connection = pymysql.connect(
         host='polymerthcedric.mysql.pythonanywhere-services.com',
         user='polymerthcedric',
@@ -223,6 +232,7 @@ def mpesa_payment():
         if len(phone_clean) != 12:
             return jsonify({"message": "Invalid phone number. Please enter a valid Safaricom number."}), 400
 
+        # DEMO credentials — Safaricom sandbox values, not for production
         consumer_key = "LF3erGEWGB70cuC7tL3yT0wna2NvmTcJkECyoT0LzVZemGqP"
         consumer_secret = "5pgWE0kLX3tbJmeOePh7Ay09dIi7fzOG47RotXOhWabzgCB2UhBgaihY1ZG7wLt2"
 
