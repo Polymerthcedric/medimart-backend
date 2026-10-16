@@ -7,28 +7,39 @@ CORS(app)
 import pymysql
 import pymysql.cursors
 import os
+import hmac
+from werkzeug.security import check_password_hash, generate_password_hash
 
 app_root = os.path.dirname(os.path.abspath(__file__))
 app.config['UPLOAD_FOLDER'] = os.path.join(app_root, 'static', 'images')
+
+
+def database_connection():
+    names = ('DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME')
+    missing = [name for name in names if not os.environ.get(name)]
+    if missing:
+        raise RuntimeError(f"Missing database configuration: {', '.join(missing)}")
+    return pymysql.connect(
+        host=os.environ['DB_HOST'],
+        user=os.environ['DB_USER'],
+        password=os.environ['DB_PASSWORD'],
+        database=os.environ['DB_NAME'],
+        port=int(os.environ.get('DB_PORT', '3306')),
+    )
 
 
 @app.route('/api/signup', methods=['POST'])
 def signup():
     username = request.form['username']
     email = request.form['email']
-    password = request.form['password']
+    password_hash = generate_password_hash(request.form['password'], method="pbkdf2:sha256")
     phone = request.form['phone']
 
-    connection = pymysql.connect(
-        host='polymerthcedric.mysql.pythonanywhere-services.com',
-        user='polymerthcedric',
-        password='modcom1234',
-        database='polymerthcedric$default'
-    )
+    connection = database_connection()
     try:
         cursor = connection.cursor()
         sql = 'insert into users(username,email,password,phone) values (%s,%s,%s,%s)'
-        data = (username, email, password, phone)
+        data = (username, email, password_hash, phone)
         cursor.execute(sql, data)
         connection.commit()
     finally:
@@ -41,23 +52,40 @@ def signin():
     email = request.form['email']
     password = request.form['password']
 
-    connection = pymysql.connect(
-        host='polymerthcedric.mysql.pythonanywhere-services.com',
-        user='polymerthcedric',
-        password='modcom1234',
-        database='polymerthcedric$default'
-    )
+    connection = database_connection()
     try:
         cursor = connection.cursor(pymysql.cursors.DictCursor)
-        sql = 'select * from users where email = %s and password = %s'
-        data = (email, password)
-        cursor.execute(sql, data)
-        count = cursor.rowcount
-        if count == 0:
+        cursor.execute('select * from users where email = %s', (email,))
+        user = cursor.fetchone()
+        if not user:
             return jsonify({"message": "Login failed"})
-        else:
-            user = cursor.fetchone()
-            return jsonify({"message": "Login successful", "user": user})
+
+        stored_password = user.get('password', '')
+        valid = False
+        try:
+            valid = check_password_hash(stored_password, password)
+        except (ValueError, TypeError):
+            pass
+
+        # Upgrade old plaintext records after a successful login, then never
+        # return password material to the client.
+        if not valid and stored_password and hmac.compare_digest(stored_password, password):
+            valid = True
+            cursor.execute(
+                'update users set password = %s where email = %s',
+                (generate_password_hash(password, method="pbkdf2:sha256"), email),
+            )
+            connection.commit()
+
+        if not valid:
+            return jsonify({"message": "Login failed"})
+
+        safe_user = {
+            key: value
+            for key, value in user.items()
+            if key not in ('password', 'password_hash')
+        }
+        return jsonify({"message": "Login successful", "user": safe_user})
     finally:
         connection.close()
 
@@ -73,12 +101,7 @@ def add_product():
         photo_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         photo.save(photo_path)
 
-        connection = pymysql.connect(
-            host='polymerthcedric.mysql.pythonanywhere-services.com',
-            user='polymerthcedric',
-            password='modcom1234',
-            database='polymerthcedric$default'
-        )
+        connection = database_connection()
         try:
             cursor = connection.cursor()
             sql = '''
@@ -103,12 +126,7 @@ def delete_product():
     try:
         product_id = request.form['product_id']
 
-        connection = pymysql.connect(
-            host='polymerthcedric.mysql.pythonanywhere-services.com',
-            user='polymerthcedric',
-            password='modcom1234',
-            database='polymerthcedric$default'
-        )
+        connection = database_connection()
         try:
             cursor = connection.cursor(pymysql.cursors.DictCursor)
 
@@ -137,12 +155,7 @@ def delete_product():
 
 @app.route('/api/get_product_details', methods=['GET'])
 def get_product_details():
-    connection = pymysql.connect(
-        host='polymerthcedric.mysql.pythonanywhere-services.com',
-        user='polymerthcedric',
-        password='modcom1234',
-        database='polymerthcedric$default'
-    )
+    connection = database_connection()
     try:
         cursor = connection.cursor(pymysql.cursors.DictCursor)
         sql = "select * from product_details"
@@ -157,23 +170,23 @@ def get_product_details():
 from nltk.chat.util import Chat, reflections
 
 pairs = [
-    (r"hi|hello|hey", ["Hello! Welcome to Medimart. How can I help you today?"]),
-    (r"how are you", ["I'm great and ready to assist you with your health needs!"]),
-    (r"(.*)your name(.*)", ["I'm Medimart Assistant — here to help you shop smarter and stay healthy."]),
-    (r"(.*)medicine(.*)available", ["We have a wide range of medicines in stock. You can search by category or name."]),
-    (r"(.*)buy medicine(.*)", ["Yes, you can purchase medicines online or at our physical location."]),
-    (r"(.*)availability of (.*)", [r"Yes, we do stock \2. You can search for it on our homepage."]),
-    (r"(.*)price of (.*)", [r"The price of \2 may vary depending on the brand. Please search it in our store."]),
-    (r"(.*)store hours", ["We are open from 9 AM to 9 PM, Monday to Saturday. Closed on Sundays."]),
-    (r"(.*)location", ["Medimart is located at 123 Main Street, near City Hospital."]),
-    (r"(.*)home delivery", ["Yes! We offer home delivery within the city limits."]),
-    (r"(.*)delivery charges", ["Delivery is free for orders above KES 500. Otherwise, a flat KES 50 fee applies."]),
-    (r"(.*)track order", ["Please provide your order ID to track your delivery."]),
-    (r"(.*)cancel order", ["You can cancel your order by contacting our support line."]),
-    (r"(.*)upload prescription", ["You can upload your prescription on our website or send it via WhatsApp."]),
-    (r"(.*)payment methods", ["We accept M-Pesa, cash, and credit cards."]),
-    (r"(.*)contact", ["Call us at +254116497339 or chat with us via WhatsApp."]),
-    (r"(.*)", ["I'm not sure about that. Could you ask something related to our store, products, or services?"])
+    (r"hi|hello|hey", ["Hi! I can answer a few demo questions about the store. What would you like to know?"]),
+    (r"how are you", ["I'm a scripted helper for this storefront demo. I can point you to the product list or payment example."]),
+    (r"(.*)your name(.*)", ["I'm the Medimart store helper. I use scripted responses, not AI."]),
+    (r"(.*)medicine(.*)available", ["Check the product list for the items shown in this demo. It may not reflect real stock."]),
+    (r"(.*)buy medicine(.*)", ["This demo shows a checkout flow. It is not a live pharmacy and does not accept real orders."]),
+    (r"(.*)availability of (.*)", ["I can't confirm real stock. Check the product list in this demo."]),
+    (r"(.*)price of (.*)", ["The product list shows sample prices for this demo. Please confirm prices with a real supplier."]),
+    (r"(.*)store hours", ["This demo does not have verified store hours."]),
+    (r"(.*)location", ["This demo does not have a verified store location."]),
+    (r"(.*)home delivery", ["Delivery options are not configured in this demo."]),
+    (r"(.*)delivery charges", ["Delivery charges are not configured in this demo."]),
+    (r"(.*)track order", ["Order tracking is not available in this demo."]),
+    (r"(.*)cancel order", ["Order cancellation is not available in this demo."]),
+    (r"(.*)upload prescription", ["Prescription upload is not available in this demo."]),
+    (r"(.*)payment methods", ["The checkout example uses Safaricom's M-Pesa sandbox. It does not take real payments."]),
+    (r"(.*)contact", ["This demo does not have a verified support contact."]),
+    (r"(.*)", ["I don't have an answer for that. Try asking about the product list or demo checkout."])
 ]
 
 chatbot = Chat(pairs, reflections)
@@ -223,31 +236,39 @@ def mpesa_payment():
         if len(phone_clean) != 12:
             return jsonify({"message": "Invalid phone number. Please enter a valid Safaricom number."}), 400
 
-        consumer_key = "LF3erGEWGB70cuC7tL3yT0wna2NvmTcJkECyoT0LzVZemGqP"
-        consumer_secret = "5pgWE0kLX3tbJmeOePh7Ay09dIi7fzOG47RotXOhWabzgCB2UhBgaihY1ZG7wLt2"
+        consumer_key = os.environ.get('MPESA_CONSUMER_KEY')
+        consumer_secret = os.environ.get('MPESA_CONSUMER_SECRET')
+        passkey = os.environ.get('MPESA_PASSKEY')
+        business_short_code = os.environ.get('MPESA_SHORT_CODE', '174379')
+        callback_url = os.environ.get('MPESA_CALLBACK_URL')
+        if not all((consumer_key, consumer_secret, passkey, callback_url)):
+            return jsonify({"message": "M-Pesa sandbox is not configured."}), 503
 
-        api_URL = "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"
-        response = requests.get(api_URL, auth=HTTPBasicAuth(consumer_key, consumer_secret))
+        api_base = os.environ.get('MPESA_API_BASE', 'https://sandbox.safaricom.co.ke').rstrip('/')
+        api_url = f"{api_base}/oauth/v1/generate?grant_type=client_credentials"
+        response = requests.get(
+            api_url,
+            auth=HTTPBasicAuth(consumer_key, consumer_secret),
+            timeout=15,
+        )
         data = response.json()
         access_token = "Bearer" + ' ' + data['access_token']
 
         timestamp = datetime.datetime.today().strftime('%Y%m%d%H%M%S')
-        passkey = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919'
-        business_short_code = "174379"
         data_str = business_short_code + passkey + timestamp
         encoded = base64.b64encode(data_str.encode())
         password = encoded.decode()
 
         payload = {
-            "BusinessShortCode": "174379",
+            "BusinessShortCode": business_short_code,
             "Password": password,
             "Timestamp": timestamp,
             "TransactionType": "CustomerPayBillOnline",
             "Amount": str(amount),
             "PartyA": phone_clean,
-            "PartyB": "174379",
+            "PartyB": business_short_code,
             "PhoneNumber": phone_clean,
-            "CallBackURL": "https://polymerthcedric.pythonanywhere.com/api/mpesa_callback",
+            "CallBackURL": callback_url,
             "AccountReference": "Medimart",
             "TransactionDesc": "Payment for Medical Products"
         }
@@ -257,8 +278,8 @@ def mpesa_payment():
             "Content-Type": "application/json"
         }
 
-        url = "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest"
-        response = requests.post(url, json=payload, headers=headers)
+        url = f"{api_base}/mpesa/stkpush/v1/processrequest"
+        response = requests.post(url, json=payload, headers=headers, timeout=20)
         print("M-Pesa Response:", response.text)
 
         result = response.json()
