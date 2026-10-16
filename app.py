@@ -2,6 +2,9 @@ from flask import *
 app = Flask(__name__)
 from flask_cors import CORS
 
+# Demo project. Runtime database and payment credentials must be supplied
+# through environment variables; never commit them to source files.
+
 CORS(app)
 
 import pymysql
