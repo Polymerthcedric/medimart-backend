@@ -72,7 +72,9 @@ def signin():
 
         # Upgrade old plaintext records after a successful login, then never
         # return password material to the client.
-        if not valid and stored_password and hmac.compare_digest(stored_password, password):
+        if not valid and stored_password and hmac.compare_digest(
+            stored_password.encode('utf-8'), password.encode('utf-8')
+        ):
             valid = True
             cursor.execute(
                 'update users set password = %s where email = %s',
@@ -247,7 +249,11 @@ def mpesa_payment():
         if not all((consumer_key, consumer_secret, passkey, callback_url)):
             return jsonify({"message": "M-Pesa sandbox is not configured."}), 503
 
-        api_base = os.environ.get('MPESA_API_BASE', 'https://sandbox.safaricom.co.ke').rstrip('/')
+        sandbox_api_base = 'https://sandbox.safaricom.co.ke'
+        api_base = os.environ.get('MPESA_API_BASE', sandbox_api_base).rstrip('/')
+        if api_base != sandbox_api_base:
+            return jsonify({"message": "This prototype supports the Safaricom sandbox only."}), 503
+
         api_url = f"{api_base}/oauth/v1/generate?grant_type=client_credentials"
         response = requests.get(
             api_url,
