@@ -12,9 +12,13 @@ import pymysql.cursors
 import os
 import hmac
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 
 app_root = os.path.dirname(os.path.abspath(__file__))
 app.config['UPLOAD_FOLDER'] = os.path.join(app_root, 'static', 'images')
+# create the upload directory on startup so /api/add_product does not fail
+# with FileNotFoundError when the repo is cloned fresh (static/ is not tracked).
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 
 def database_connection():
@@ -102,7 +106,11 @@ def add_product():
         product_description = request.form['product_description']
         product_cost = request.form['product_cost']
         photo = request.files['product_photo']
-        filename = photo.filename
+        # secure_filename strips path separators so a client cannot write
+        # outside the upload directory. Reject an empty result explicitly.
+        filename = secure_filename(photo.filename or '')
+        if not filename:
+            return jsonify({"error": "Invalid or missing product_photo"}), 400
         photo_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         photo.save(photo_path)
 
@@ -190,7 +198,7 @@ pairs = [
     (r"(.*)cancel order", ["Order cancellation is not available in this demo."]),
     (r"(.*)upload prescription", ["Prescription upload is not available in this demo."]),
     (r"(.*)payment methods", ["The checkout example uses Safaricom's M-Pesa sandbox. It does not take real payments."]),
-    (r"(.*)contact", ["This demo does not have a verified support contact."]),
+    (r"(.*)contact", ["Contact details shown in this demo are illustrative only; there is no support team behind it."]),
     (r"(.*)", ["I don't have an answer for that. Try asking about the product list or demo checkout."])
 ]
 
@@ -230,10 +238,10 @@ def mpesa_payment():
         phone_clean = ''.join(filter(str.isdigit, phone))
 
         # Convert to SafariCom format: 254XXXXXXXXX
+        # Phone numbers are digit-filtered above, so '+254' can never appear
+        # here. Normalise local 07... numbers and already-prefixed 254... ones.
         if phone_clean.startswith('0'):
             phone_clean = '254' + phone_clean[1:]
-        elif phone_clean.startswith('+254'):
-            phone_clean = phone_clean[1:]
         elif not phone_clean.startswith('254'):
             phone_clean = '254' + phone_clean
 
