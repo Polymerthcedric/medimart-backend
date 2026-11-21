@@ -89,6 +89,7 @@ This repository is a public, educational demo and is **not production ready**.
 Offline tests use Flask's test client, stubbing database calls and the environment; they need no database or network:
 
 ```sh
+python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
